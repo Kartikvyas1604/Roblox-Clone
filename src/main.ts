@@ -24,12 +24,19 @@ river.position.z = 0;
 river.position.y = 1.01; // slightly above ground
 scene.add(river);
 
-// Bridge (crosses river at center)
-const bridgeGeometry = new THREE.BoxGeometry(20, 0.5, 3);
+// Curved bridge: use multiple segments to form an arc connecting land to land
+// Straight bridge across the river
 const bridgeMaterial = new THREE.MeshPhongMaterial({ color: 0x8B5A2B });
-const bridge = new THREE.Mesh(bridgeGeometry, bridgeMaterial);
-bridge.position.set(0, 1.3, 0); // above river
+const bridgeWidth = 3;
+const bridgeLength = 40;
+const bridgeY = 1.55 + 0.25;
+const bridge = new THREE.Mesh(
+  new THREE.BoxGeometry(bridgeLength, 0.5, bridgeWidth),
+  bridgeMaterial
+);
+bridge.position.set(0, bridgeY, 0); // center over river
 scene.add(bridge);
+const spawnPosition = { x: -bridgeLength / 2 + 2, z: 0 };
 
 // Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -176,11 +183,19 @@ for (let i = 0; i < 120; i++) {
 const keys: Record<string, boolean> = {};
 let velocityY = 0;
 let isOnGround = true;
+// Use only the new spawnPosition for the straight bridge
+// Snake NPC
 
 document.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; });
 document.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 
 let walkTime = 0;
+// Remove old isOnCurvedBridge
+function isOnBridge(x: number, z: number) {
+  // Check if (x, z) is on the straight bridge
+  return Math.abs(z) < bridgeWidth / 2 && x > -bridgeLength / 2 && x < bridgeLength / 2;
+}
+
 function animate() {
   requestAnimationFrame(animate);
 
@@ -201,8 +216,8 @@ function animate() {
   character.position.y += velocityY;
 
   // Check if on ground or bridge
-  let onBridge = Math.abs(character.position.x) < 10 && Math.abs(character.position.z) < 1.5;
-  let groundLevel = onBridge ? 1.55 : 1;
+  let onBridge = isOnBridge(character.position.x, character.position.z);
+  let groundLevel = onBridge ? bridgeY : 1;
   if (character.position.y <= groundLevel) {
     character.position.y = groundLevel;
     velocityY = 0;
@@ -212,6 +227,15 @@ function animate() {
   if ((keys[' '] || keys['space']) && isOnGround) {
     velocityY = 0.22;
     isOnGround = false;
+  }
+
+  // If player falls in river (y < 1 and not on bridge), respawn at bridge start
+  if (character.position.y < 0.7 && !onBridge) {
+    character.position.x = spawnPosition.x;
+    character.position.z = spawnPosition.z;
+    character.position.y = 1.3;
+    velocityY = 0;
+    isOnGround = true;
   }
 
   // Animate player limbs if moving
@@ -249,6 +273,8 @@ function animate() {
       legs[3].rotation.x = Math.sin(walkTime + i) * 0.7;
     }
   });
+
+  // Removed snake animation
 
   // Camera follows character
   camera.position.x = character.position.x;
