@@ -1,294 +1,269 @@
 import * as THREE from 'three';
+import './style.css';
 
-// Basic setup
+// --- Scene Setup ---
 const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87CEEB); // Sky blue
+scene.fog = new THREE.Fog(0x87CEEB, 10, 50);
+
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer();
+const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
+// --- Lighting ---
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(20, 50, 20);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.width = 2048;
+dirLight.shadow.mapSize.height = 2048;
+dirLight.shadow.camera.near = 0.5;
+dirLight.shadow.camera.far = 100;
+dirLight.shadow.camera.left = -50;
+dirLight.shadow.camera.right = 50;
+dirLight.shadow.camera.top = 50;
+dirLight.shadow.camera.bottom = -50;
+scene.add(dirLight);
+
+// --- Environment ---
 // Ground
-const groundGeometry = new THREE.PlaneGeometry(100, 100);
-const groundMaterial = new THREE.MeshPhongMaterial({ color: 0x228B22 });
+const groundGeometry = new THREE.PlaneGeometry(200, 200);
+const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x4CAF50 }); // Green grass
 const ground = new THREE.Mesh(groundGeometry, groundMaterial);
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
-// River (centered horizontally, runs across the scene)
-const riverGeometry = new THREE.PlaneGeometry(100, 12);
-const riverMaterial = new THREE.MeshPhongMaterial({ color: 0x1e90ff, transparent: true, opacity: 0.8 });
+// River
+const riverGeometry = new THREE.PlaneGeometry(200, 20);
+const riverMaterial = new THREE.MeshStandardMaterial({ color: 0x2196F3, transparent: true, opacity: 0.8 });
 const river = new THREE.Mesh(riverGeometry, riverMaterial);
 river.rotation.x = -Math.PI / 2;
-river.position.z = 0;
-river.position.y = 1.01; // slightly above ground
+river.position.y = 0.1;
+river.position.z = -15;
 scene.add(river);
 
-// Curved bridge: use multiple segments to form an arc connecting land to land
-// Straight bridge across the river
-const bridgeMaterial = new THREE.MeshPhongMaterial({ color: 0x8B5A2B });
-const bridgeWidth = 3;
-const bridgeLength = 40;
-const bridgeY = 1.55 + 0.25;
-const bridge = new THREE.Mesh(
-  new THREE.BoxGeometry(bridgeLength, 0.5, bridgeWidth),
-  bridgeMaterial
-);
-bridge.position.set(0, bridgeY, 0); // center over river
-scene.add(bridge);
-const spawnPosition = { x: -bridgeLength / 2 + 2, z: 0 };
-
-// Lighting
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-scene.add(ambientLight);
-const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-directionalLight.position.set(10, 20, 10);
-directionalLight.castShadow = true;
-scene.add(directionalLight);
-
-// Main player character (humanoid)
-function createHuman(color = 0x00aaff) {
-  const group = new THREE.Group();
-  // Body
-  const body = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.4, 0.4, 1.2, 16),
-    new THREE.MeshPhongMaterial({ color })
-  );
-  body.position.y = 1.2;
-  group.add(body);
-  // Head
-  const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.3, 16, 16),
-    new THREE.MeshPhongMaterial({ color: 0xffcc99 })
-  );
-  head.position.y = 2;
-  group.add(head);
-  // Left leg
-  const leftLeg = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.15, 0.15, 0.8, 12),
-    new THREE.MeshPhongMaterial({ color: 0x333333 })
-  );
-  leftLeg.position.x = -0.18;
-  leftLeg.position.y = 0.4;
-  group.add(leftLeg);
-  // Right leg
-  const rightLeg = leftLeg.clone();
-  rightLeg.position.x = 0.18;
-  group.add(rightLeg);
-  // Left arm
-  const leftArm = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.12, 0.12, 0.7, 12),
-    new THREE.MeshPhongMaterial({ color })
-  );
-  leftArm.position.x = -0.5;
-  leftArm.position.y = 1.5;
-  leftArm.rotation.z = Math.PI / 8;
-  group.add(leftArm);
-  // Right arm
-  const rightArm = leftArm.clone();
-  rightArm.position.x = 0.5;
-  rightArm.position.y = 1.5;
-  rightArm.rotation.z = -Math.PI / 8;
-  group.add(rightArm);
-  // Store limbs for animation
-  (group as any).limbs = { leftLeg, rightLeg, leftArm, rightArm };
-  return group;
+// Bridge
+const bridgeGroup = new THREE.Group();
+const bridgePlankGeo = new THREE.BoxGeometry(4, 0.2, 1);
+const bridgePlankMat = new THREE.MeshStandardMaterial({ color: 0x8D6E63 });
+for (let i = 0; i < 20; i++) {
+    const plank = new THREE.Mesh(bridgePlankGeo, bridgePlankMat);
+    plank.position.set(0, 0.5, -25 + i * 1.1);
+    plank.castShadow = true;
+    plank.receiveShadow = true;
+    bridgeGroup.add(plank);
 }
-
-const character = createHuman(0x00aaff);
-character.position.y = 1;
-character.castShadow = true;
-scene.add(character);
-
-// NPC Humans
-const npcs: THREE.Group[] = [];
-for (let i = 0; i < 5; i++) {
-  const npc = createHuman(0xff4444 + i * 0x1111);
-  npc.position.set(Math.random() * 80 - 40, 1, Math.random() * 80 - 40);
-  scene.add(npc);
-  npcs.push(npc);
-}
-
-// Animal NPCs (simple quadrupeds)
-function createAnimal(color = 0x996633) {
-  const group = new THREE.Group();
-  // Body
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(1, 0.5, 0.4),
-    new THREE.MeshPhongMaterial({ color })
-  );
-  body.position.y = 0.5;
-  group.add(body);
-  // Head
-  const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.22, 12, 12),
-    new THREE.MeshPhongMaterial({ color: 0xffcc99 })
-  );
-  head.position.y = 0.8;
-  head.position.x = 0.6;
-  group.add(head);
-  // Legs
-  const legs: THREE.Mesh[] = [];
-  for (let i = -1; i <= 1; i += 2) {
-    for (let j = -1; j <= 1; j += 2) {
-      const leg = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.08, 0.08, 0.5, 8),
-        new THREE.MeshPhongMaterial({ color: 0x333333 })
-      );
-      leg.position.x = 0.35 * i;
-      leg.position.z = 0.15 * j;
-      leg.position.y = 0.25;
-      group.add(leg);
-      legs.push(leg);
-    }
-  }
-  (group as any).legs = legs;
-  return group;
-}
-
-const animals: THREE.Group[] = [];
-for (let i = 0; i < 4; i++) {
-  const animal = createAnimal(0x996633 + i * 0x2222);
-  animal.position.set(Math.random() * 80 - 40, 1, Math.random() * 80 - 40);
-  scene.add(animal);
-  animals.push(animal);
-}
+scene.add(bridgeGroup);
 
 // Trees
-function addTree(x: number, z: number) {
-  const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.2, 2);
-  const trunkMaterial = new THREE.MeshPhongMaterial({ color: 0x8B4513 });
-  const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-  trunk.position.set(x, 1, z);
-  scene.add(trunk);
+function createTree(x: number, z: number) {
+    const treeGroup = new THREE.Group();
+    
+    const trunkGeo = new THREE.CylinderGeometry(0.5, 0.7, 3, 8);
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x795548 });
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    trunk.position.y = 1.5;
+    trunk.castShadow = true;
+    trunk.receiveShadow = true;
+    treeGroup.add(trunk);
 
-  const leavesGeometry = new THREE.SphereGeometry(0.8, 8, 8);
-  const leavesMaterial = new THREE.MeshPhongMaterial({ color: 0x228B22 });
-  const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
-  leaves.position.set(x, 2.2, z);
-  scene.add(leaves);
-}
-// Amazon jungle: lots of trees
-for (let i = 0; i < 120; i++) {
-  // Avoid placing trees on the river or bridge
-  let x, z;
-  do {
-    x = Math.random() * 90 - 45;
-    z = Math.random() * 90 - 45;
-  } while (Math.abs(z) < 8 && Math.abs(x) < 12); // keep river and bridge clear
-  addTree(x, z);
+    const leavesGeo = new THREE.ConeGeometry(2.5, 5, 8);
+    const leavesMat = new THREE.MeshStandardMaterial({ color: 0x2E7D32 });
+    const leaves = new THREE.Mesh(leavesGeo, leavesMat);
+    leaves.position.y = 4;
+    leaves.castShadow = true;
+    leaves.receiveShadow = true;
+    treeGroup.add(leaves);
+
+    treeGroup.position.set(x, 0, z);
+    scene.add(treeGroup);
 }
 
-// Controls
+// Random trees
+for (let i = 0; i < 30; i++) {
+    const x = (Math.random() - 0.5) * 100;
+    const z = (Math.random() - 0.5) * 100;
+    // Avoid river area
+    if (z > -25 && z < -5) continue;
+    createTree(x, z);
+}
+
+// --- Character (Roblox-style) ---
+class Character {
+    mesh: THREE.Group;
+    head: THREE.Mesh;
+    torso: THREE.Mesh;
+    leftArm: THREE.Mesh;
+    rightArm: THREE.Mesh;
+    leftLeg: THREE.Mesh;
+    rightLeg: THREE.Mesh;
+    
+    velocity = new THREE.Vector3();
+    onGround = false;
+    speed = 0.2;
+    jumpForce = 0.4;
+    
+    constructor(color: number = 0xFFC107) {
+        this.mesh = new THREE.Group();
+
+        const skinMat = new THREE.MeshStandardMaterial({ color: 0xFFCC80 }); // Skin tone
+        const shirtMat = new THREE.MeshStandardMaterial({ color: color });
+        const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1565C0 }); // Blue pants
+
+        // Torso (2x2x1)
+        this.torso = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 1), shirtMat);
+        this.torso.position.y = 2;
+        this.torso.castShadow = true;
+        this.mesh.add(this.torso);
+
+        // Head (1.2x1.2x1.2)
+        this.head = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), skinMat);
+        this.head.position.y = 3.6;
+        this.head.castShadow = true;
+        this.mesh.add(this.head);
+
+        // Arms (1x2x1)
+        const armGeo = new THREE.BoxGeometry(1, 2, 1);
+        this.leftArm = new THREE.Mesh(armGeo, shirtMat);
+        this.leftArm.position.set(-1.5, 2, 0);
+        this.leftArm.castShadow = true;
+        this.mesh.add(this.leftArm);
+
+        this.rightArm = new THREE.Mesh(armGeo, shirtMat);
+        this.rightArm.position.set(1.5, 2, 0);
+        this.rightArm.castShadow = true;
+        this.mesh.add(this.rightArm);
+
+        // Legs (1x2x1)
+        const legGeo = new THREE.BoxGeometry(1, 2, 1);
+        this.leftLeg = new THREE.Mesh(legGeo, pantsMat);
+        this.leftLeg.position.set(-0.5, 0, 0); // Pivot at top
+        this.leftLeg.geometry.translate(0, -1, 0); // Move geometry so pivot is at top
+        this.leftLeg.position.y = 1;
+        this.leftLeg.castShadow = true;
+        this.mesh.add(this.leftLeg);
+
+        this.rightLeg = new THREE.Mesh(legGeo, pantsMat);
+        this.rightLeg.position.set(0.5, 0, 0);
+        this.rightLeg.geometry.translate(0, -1, 0);
+        this.rightLeg.position.y = 1;
+        this.rightLeg.castShadow = true;
+        this.mesh.add(this.rightLeg);
+
+        scene.add(this.mesh);
+    }
+
+    update(keys: Record<string, boolean>, dt: number) {
+        // Movement
+        let moveX = 0;
+        let moveZ = 0;
+        let isMoving = false;
+
+        if (keys['w'] || keys['arrowup']) { moveZ -= 1; isMoving = true; }
+        if (keys['s'] || keys['arrowdown']) { moveZ += 1; isMoving = true; }
+        if (keys['a'] || keys['arrowleft']) { moveX -= 1; isMoving = true; }
+        if (keys['d'] || keys['arrowright']) { moveX += 1; isMoving = true; }
+
+        // Normalize movement vector
+        if (moveX !== 0 || moveZ !== 0) {
+            const len = Math.sqrt(moveX * moveX + moveZ * moveZ);
+            moveX /= len;
+            moveZ /= len;
+            
+            this.mesh.position.x += moveX * this.speed;
+            this.mesh.position.z += moveZ * this.speed;
+            
+            // Rotate character to face direction
+            const angle = Math.atan2(moveX, moveZ);
+            this.mesh.rotation.y = angle;
+        }
+
+        // Jump
+        if (keys[' '] && this.onGround) {
+            this.velocity.y = this.jumpForce;
+            this.onGround = false;
+        }
+
+        // Gravity
+        this.velocity.y -= 0.02;
+        this.mesh.position.y += this.velocity.y;
+
+        // Ground collision
+        if (this.mesh.position.y < 0) {
+            this.mesh.position.y = 0;
+            this.velocity.y = 0;
+            this.onGround = true;
+        }
+
+        // Animation
+        if (isMoving) {
+            const time = Date.now() * 0.01;
+            this.leftLeg.rotation.x = Math.sin(time) * 0.5;
+            this.rightLeg.rotation.x = Math.sin(time + Math.PI) * 0.5;
+            this.leftArm.rotation.x = Math.sin(time + Math.PI) * 0.5;
+            this.rightArm.rotation.x = Math.sin(time) * 0.5;
+        } else {
+            this.leftLeg.rotation.x = 0;
+            this.rightLeg.rotation.x = 0;
+            this.leftArm.rotation.x = 0;
+            this.rightArm.rotation.x = 0;
+        }
+    }
+}
+
+const player = new Character(0xE53935); // Red shirt
+
+// --- NPCs ---
+const npcs: Character[] = [];
+for (let i = 0; i < 5; i++) {
+    const npc = new Character(Math.random() * 0xffffff);
+    npc.mesh.position.set((Math.random() - 0.5) * 50, 0, (Math.random() - 0.5) * 50);
+    npcs.push(npc);
+}
+
+// --- Input Handling ---
 const keys: Record<string, boolean> = {};
-let velocityY = 0;
-let isOnGround = true;
-// Use only the new spawnPosition for the straight bridge
-// Snake NPC
+window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
-document.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; });
-document.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
-
-let walkTime = 0;
-// Remove old isOnCurvedBridge
-function isOnBridge(x: number, z: number) {
-  // Check if (x, z) is on the straight bridge
-  return Math.abs(z) < bridgeWidth / 2 && x > -bridgeLength / 2 && x < bridgeLength / 2;
-}
-
+// --- Animation Loop ---
 function animate() {
-  requestAnimationFrame(animate);
+    requestAnimationFrame(animate);
 
-  // Movement
-  let moveX = 0, moveZ = 0;
-  const speed = keys['shift'] ? 0.2 : 0.1;
-  let isMoving = false;
-  if (keys['w'] || keys['arrowup']) { moveZ -= speed; isMoving = true; }
-  if (keys['s'] || keys['arrowdown']) { moveZ += speed; isMoving = true; }
-  if (keys['a'] || keys['arrowleft']) { moveX -= speed; isMoving = true; }
-  if (keys['d'] || keys['arrowright']) { moveX += speed; isMoving = true; }
+    player.update(keys, 0.016);
 
-  character.position.x += moveX;
-  character.position.z += moveZ;
+    // Simple NPC behavior (idle animation)
+    const time = Date.now() * 0.005;
+    npcs.forEach((npc, i) => {
+        npc.leftArm.rotation.z = Math.sin(time + i) * 0.1;
+        npc.rightArm.rotation.z = -Math.sin(time + i) * 0.1;
+    });
 
-  // Gravity and jump for player
-  velocityY -= 0.02; // stronger gravity
-  character.position.y += velocityY;
+    // Camera Follow
+    const targetPos = player.mesh.position.clone();
+    targetPos.y += 2;
+    
+    const cameraOffset = new THREE.Vector3(0, 10, 15);
+    // Rotate offset based on player rotation? No, fixed camera angle is easier for now
+    // Or maybe smooth follow
+    
+    camera.position.lerp(targetPos.clone().add(cameraOffset), 0.1);
+    camera.lookAt(targetPos);
 
-  // Check if on ground or bridge
-  let onBridge = isOnBridge(character.position.x, character.position.z);
-  let groundLevel = onBridge ? bridgeY : 1;
-  if (character.position.y <= groundLevel) {
-    character.position.y = groundLevel;
-    velocityY = 0;
-    isOnGround = true;
-  }
-  // Jump
-  if ((keys[' '] || keys['space']) && isOnGround) {
-    velocityY = 0.22;
-    isOnGround = false;
-  }
-
-  // If player falls in river (y < 1 and not on bridge), respawn at bridge start
-  if (character.position.y < 0.7 && !onBridge) {
-    character.position.x = spawnPosition.x;
-    character.position.z = spawnPosition.z;
-    character.position.y = 1.3;
-    velocityY = 0;
-    isOnGround = true;
-  }
-
-  // Animate player limbs if moving
-  walkTime += isMoving ? 0.15 : 0.05;
-  const limbs = (character as any).limbs;
-  if (limbs) {
-    limbs.leftLeg.rotation.x = Math.sin(walkTime) * (isMoving ? 0.7 : 0.1);
-    limbs.rightLeg.rotation.x = -Math.sin(walkTime) * (isMoving ? 0.7 : 0.1);
-    limbs.leftArm.rotation.x = -Math.sin(walkTime) * (isMoving ? 0.5 : 0.05);
-    limbs.rightArm.rotation.x = Math.sin(walkTime) * (isMoving ? 0.5 : 0.05);
-  }
-
-  // Animate NPCs (walk in place)
-  npcs.forEach((npc, i) => {
-    npc.position.y = 1 + Math.abs(Math.sin(Date.now() * 0.001 + i) * 0.2);
-    npc.rotation.y += 0.005;
-    const limbs = (npc as any).limbs;
-    if (limbs) {
-      limbs.leftLeg.rotation.x = Math.sin(walkTime + i) * 0.7;
-      limbs.rightLeg.rotation.x = -Math.sin(walkTime + i) * 0.7;
-      limbs.leftArm.rotation.x = -Math.sin(walkTime + i) * 0.5;
-      limbs.rightArm.rotation.x = Math.sin(walkTime + i) * 0.5;
-    }
-  });
-  // Animate animals (walk in circles, animate legs)
-  animals.forEach((animal, i) => {
-    animal.position.x += Math.sin(Date.now() * 0.001 + i) * 0.02;
-    animal.position.z += Math.cos(Date.now() * 0.001 + i) * 0.02;
-    animal.rotation.y += 0.01;
-    const legs = (animal as any).legs;
-    if (legs) {
-      legs[0].rotation.x = Math.sin(walkTime + i) * 0.7;
-      legs[1].rotation.x = -Math.sin(walkTime + i) * 0.7;
-      legs[2].rotation.x = -Math.sin(walkTime + i) * 0.7;
-      legs[3].rotation.x = Math.sin(walkTime + i) * 0.7;
-    }
-  });
-
-  // Removed snake animation
-
-  // Camera follows character
-  camera.position.x = character.position.x;
-  camera.position.z = character.position.z + 5;
-  camera.position.y = character.position.y + 4;
-  camera.lookAt(character.position);
-
-  renderer.render(scene, camera);
+    renderer.render(scene, camera);
 }
+
 animate();
 
-// Handle window resize
+// --- Resize Handler ---
 window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
 });
